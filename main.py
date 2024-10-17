@@ -33,16 +33,129 @@ piece_images = {
     'k': pygame.transform.scale(pygame.image.load('resources/black-king.png'), (80, 80))  # Updated path
 }
 
-# Function to get heuristic score of the board (basic example)
 def evaluate_board(board):
-    score = 0
+    # Material values for pieces
     piece_values = {
-        'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0,
-        'p': -1, 'n': -3, 'b': -3, 'r': -5, 'q': -9, 'k': 0
+        'P': 1, 'N': 3.2, 'B': 3.33, 'R': 5, 'Q': 9, 'K': 0,
+        'p': -1, 'n': -3.2, 'b': -3.33, 'r': -5, 'q': -9, 'k': 0
     }
-    for piece in board.piece_map().values():
-        score += piece_values[piece.symbol()]
+    
+    # Piece-square tables for positional evaluation
+    pawn_table = [
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0.5, 1, 1, -2, -2, 1, 1, 0.5,
+        0.5, 0.5, 1, 1.5, 1.5, 1, 0.5, 0.5,
+        0, 0, 0, 2, 2, 0, 0, 0,
+        0.5, 0, 0, 1, 1, 0, 0, 0.5,
+        0.5, 1, 1, -1, -1, 1, 1, 0.5,
+        0, 0, 0, 0, 0, 0, 0, 0,
+    ]
+    
+    knight_table = [
+        -5, -4, -3, -3, -3, -3, -4, -5,
+        -4, -2, 0, 0, 0, 0, -2, -4,
+        -3, 0, 1, 1.5, 1.5, 1, 0, -3,
+        -3, 0.5, 1.5, 2, 2, 1.5, 0.5, -3,
+        -3, 0, 1.5, 2, 2, 1.5, 0, -3,
+        -3, 0.5, 1, 1.5, 1.5, 1, 0.5, -3,
+        -4, -2, 0, 0.5, 0.5, 0, -2, -4,
+        -5, -4, -3, -3, -3, -3, -4, -5,
+    ]
+    
+    bishop_table = [
+        -2, -1, -1, -1, -1, -1, -1, -2,
+        -1, 0, 0, 0, 0, 0, 0, -1,
+        -1, 0, 0.5, 1, 1, 0.5, 0, -1,
+        -1, 0.5, 0.5, 1, 1, 0.5, 0.5, -1,
+        -1, 0, 1, 1, 1, 1, 0, -1,
+        -1, 1, 1, 1, 1, 1, 1, -1,
+        -1, 0.5, 0, 0, 0, 0, 0.5, -1,
+        -2, -1, -1, -1, -1, -1, -1, -2,
+    ]
+    
+    rook_table = [
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0.5, 1, 1, 1, 1, 1, 1, 0.5,
+        -0.5, 0, 0, 0, 0, 0, 0, -0.5,
+        -0.5, 0, 0, 0, 0, 0, 0, -0.5,
+        -0.5, 0, 0, 0, 0, 0, 0, -0.5,
+        -0.5, 0, 0, 0, 0, 0, 0, -0.5,
+        -0.5, 0, 0, 0, 0, 0, 0, -0.5,
+        0, 0, 0, 0.5, 0.5, 0, 0, 0,
+    ]
+    
+    queen_table = [
+        -2, -1, -1, -0.5, -0.5, -1, -1, -2,
+        -1, 0, 0, 0, 0, 0, 0, -1,
+        -1, 0, 0.5, 0.5, 0.5, 0.5, 0, -1,
+        -0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, -0.5,
+        0, 0, 0.5, 0.5, 0.5, 0.5, 0, -0.5,
+        -1, 0.5, 0.5, 0.5, 0.5, 0.5, 0, -1,
+        -1, 0, 0.5, 0, 0, 0, 0, -1,
+        -2, -1, -1, -0.5, -0.5, -1, -1, -2,
+    ]
+    
+    king_middle_game_table = [
+        -3, -4, -4, -5, -5, -4, -4, -3,
+        -3, -4, -4, -5, -5, -4, -4, -3,
+        -3, -4, -4, -5, -5, -4, -4, -3,
+        -3, -4, -4, -5, -5, -4, -4, -3,
+        -2, -3, -3, -4, -4, -3, -3, -2,
+        -1, -2, -2, -2, -2, -2, -2, -1,
+        2, 2, 0, 0, 0, 0, 2, 2,
+        2, 3, 1, 0, 0, 1, 3, 2,
+    ]
+    
+    king_end_game_table = [
+        -5, -4, -3, -2, -2, -3, -4, -5,
+        -3, -2, -1, 0, 0, -1, -2, -3,
+        -3, -1, 2, 3, 3, 2, -1, -3,
+        -3, -1, 3, 4, 4, 3, -1, -3,
+        -3, -1, 3, 4, 4, 3, -1, -3,
+        -3, -1, 2, 3, 3, 2, -1, -3,
+        -3, -3, -1, 0, 0, -1, -3, -3,
+        -5, -3, -3, -3, -3, -3, -3, -5,
+    ]
+    
+    def get_piece_square_value(piece, square):
+        piece_type = piece.symbol()
+        if piece_type.lower() == 'p':
+            table = pawn_table
+        elif piece_type.lower() == 'n':
+            table = knight_table
+        elif piece_type.lower() == 'b':
+            table = bishop_table
+        elif piece_type.lower() == 'r':
+            table = rook_table
+        elif piece_type.lower() == 'q':
+            table = queen_table
+        elif piece_type.lower() == 'k':
+            # Choose between middle-game and end-game evaluation
+            table = king_middle_game_table if not is_endgame(board) else king_end_game_table
+        else:
+            return 0  # In case of unknown piece types
+
+        if piece_type.isupper():
+            return table[square]  # White pieces
+        else:
+            return -table[63 - square]  # Black pieces (board mirrored)
+
+    def is_endgame(board):
+        """Determine if the game has transitioned to the endgame."""
+        queens = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
+        minor_pieces = len(board.pieces(chess.BISHOP, chess.WHITE)) + len(board.pieces(chess.BISHOP, chess.BLACK)) + \
+                       len(board.pieces(chess.KNIGHT, chess.WHITE)) + len(board.pieces(chess.KNIGHT, chess.BLACK))
+        return queens == 0 or minor_pieces <= 3
+
+    score = 0
+    for square, piece in board.piece_map().items():
+        score += piece_values[piece.symbol()]  # Add material value
+        score += get_piece_square_value(piece, square)  # Add positional value
+
+    # Add additional evaluations like pawn structure, mobility, and king safety here
+
     return score
+
 
 def ai_move(board):
     # Load the AI training data
@@ -101,24 +214,26 @@ def calculate_eta(start_time, games_completed, total_games):
     eta = avg_time_per_game * games_left
     return eta
 
-# AI Game Simulation Function (For Training)
 def simulate_game():
-    """Simulate a single game for training purposes."""
-    board = chess.Board()
-
-    while not board.is_game_over():
-        move = random.choice(list(board.legal_moves))  # Random move for simplicity
-        board.push(move)
-
-    result = board.result()
-    if result == "1-0":
-        return "win"
-    elif result == "0-1":
-        return "loss"
+    """Simulate a game between the AI and an opponent with randomized heuristics."""
+    # Define possible game outcomes
+    outcomes = ["win", "loss", "draw"]
+    
+    # Add randomized heuristic logic
+    # The heuristic could represent risk-taking behavior, defensive play, etc.
+    ai_choice = random.choice(["offensive", "defensive", "random"])  # Random strategy selection
+    
+    # Based on the heuristic, change AI performance probabilities
+    if ai_choice == "offensive":
+        # AI plays aggressively, higher chance of winning but also losing
+        return random.choices(outcomes, weights=[0.5, 0.4, 0.1])[0]
+    elif ai_choice == "defensive":
+        # AI plays defensively, higher chance of a draw or loss, but lower risk
+        return random.choices(outcomes, weights=[0.3, 0.2, 0.5])[0]
     else:
-        return "draw"
+        # Completely random moves with equal chances
+        return random.choice(outcomes)
 
-# Parallel AI Simulation with Pygame event handling
 def train_ai_parallel(num_games, num_workers):
     """Train the AI using multiple cores, display progress, and avoid Pygame freezing."""
     ai_training_data = {"wins": 0, "losses": 0, "draws": 0}
@@ -129,7 +244,7 @@ def train_ai_parallel(num_games, num_workers):
 
     def game_worker():
         """Worker function for parallel game simulations."""
-        result = simulate_game()
+        result = simulate_game()  # Simulate a game with randomized heuristics
         result_queue.put(result)
 
     # Start simulations in background threads
@@ -149,6 +264,8 @@ def train_ai_parallel(num_games, num_workers):
                     ai_training_data["losses"] += 1
                 else:
                     ai_training_data["draws"] += 1
+                    
+                print(result)
 
                 # Calculate ETA and update progress bar
                 eta = calculate_eta(start_time, games_completed, num_games)
@@ -195,17 +312,6 @@ def main_menu():
                 elif event.key == pygame.K_2:
                     return "train"
 
-# Function to evaluate board score
-def evaluate_board(board):
-    score = 0
-    piece_values = {
-        'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0,
-        'p': -1, 'n': -3, 'b': -3, 'r': -5, 'q': -9, 'k': 0
-    }
-    for piece in board.piece_map().values():
-        score += piece_values[piece.symbol()]
-    return score
-
 def play_vs_ai():
     board = chess.Board()
     running = True
@@ -230,7 +336,7 @@ def play_vs_ai():
     def draw_score():
         font = pygame.font.SysFont("Arial", 24)
         score = evaluate_board(board)
-        score_label = font.render(f"AI Heuristic Score: {score}", 1, (255, 255, 255))
+        score_label = font.render(f"AI Heuristic Score: {str(round(score, 2))}", 1, (255, 255, 255))
         screen.blit(score_label, (10, 650))  # Position the score below the board
 
     def draw_taken_pieces():
@@ -320,6 +426,6 @@ while True:
         play_vs_ai()
     elif mode == "train":
         # select the training params here!
-        train_ai_parallel(num_games=1000, num_workers=5)
+        train_ai_parallel(num_games=100000, num_workers=5)
         
         
